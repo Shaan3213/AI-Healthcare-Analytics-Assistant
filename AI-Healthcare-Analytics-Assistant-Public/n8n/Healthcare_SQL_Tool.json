@@ -1,0 +1,206 @@
+{
+  "name": "Healthcare SQL Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            },
+            {
+              "name": "user_question"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "92ab108f-7090-49fd-a5ca-cb5316960493",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.Generated_SQL }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.snowflake",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "5c12d9dc-591d-4b65-9d2e-37655ed3944e",
+      "name": "Snowflake"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Healthcare AI Query Log"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Query_ID": "={{$execution.id}}",
+            "Timestamp": "={{$now}}",
+            "User_Question": "={{ $('When Executed by Another Workflow').item.json.user_question }}",
+            "Generated_SQL": "={{ $('SQL Rules Setting').item.json.query }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Query_ID",
+              "displayName": "Query_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "User_Question",
+              "displayName": "User_Question",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Generated_SQL",
+              "displayName": "Generated_SQL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        0
+      ],
+      "id": "4712e823-f45e-4c38-a1de-e8fc3626fe38",
+      "name": "Append row in sheet"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (!items.length) {\n  throw new Error('No input data received.');\n}\n\nconst sql = String(items[0].json.query || '').trim();\n\nif (!sql) {\n  throw new Error('No SQL query was provided.');\n}\n\nconst normalized = sql\n  .replace(/--.*$/gm, '')\n  .replace(/\\/\\*[\\s\\S]*?\\*\\//g, '')\n  .trim()\n  .toUpperCase();\n\nif (!/^(SELECT|WITH)\\b/.test(normalized)) {\n  throw new Error(\n    'Rejected: only read-only SELECT/WITH queries are allowed.'\n  );\n}\n\nconst forbiddenKeywords = [\n  'INSERT',\n  'UPDATE',\n  'DELETE',\n  'DROP',\n  'ALTER',\n  'TRUNCATE',\n  'MERGE',\n  'CREATE',\n  'GRANT',\n  'REVOKE',\n  'CALL',\n  'EXEC',\n  'EXECUTE'\n];\n\nfor (const keyword of forbiddenKeywords) {\n  const pattern = new RegExp(`\\\\b${keyword}\\\\b`, 'i');\n\n  if (pattern.test(normalized)) {\n    throw new Error(`Rejected: forbidden SQL operation detected: ${keyword}`);\n  }\n}\n\nif (\n  !normalized.includes('HEALTHCARE_DB.CLEAN_SCHEMA') &&\n  !normalized.includes('CLEAN_SCHEMA.')\n) {\n  throw new Error(\n    'Rejected: query must access HEALTHCARE_DB.CLEAN_SCHEMA.'\n  );\n}\n\nreturn [\n  {\n    json: {\n      query: sql,\n      validation_status: 'PASSED',\n      validation_timestamp: new Date().toISOString()\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "1cada46e-9f88-4f48-89e7-ea7610fa1fb8",
+      "name": "SQL Rules Setting"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "query": "SELECT COUNT(*) AS TOTAL_PROVIDERS FROM HEALTHCARE_DB.CLEAN_SCHEMA.PROVIDERS;;"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "SQL Rules Setting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snowflake": {
+      "main": [
+        []
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Snowflake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Rules Setting": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "5VqJjqaGkJfQHqCu",
+  "tags": []
+}
